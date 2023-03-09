@@ -61,9 +61,12 @@
 
 #define XGPIOPS_IRQ_TYPE_EDGE_RISING 0
 
-// ---------------- Function prototypes
+// ---------------- Function prototypes ----------------
 static void init_axi_gpio();
+static int check_switches_initial();
 static void toggle_leds();
+static void blink_leds_normally();
+static void blink_leds_sos();
 static void intr_handler();
 static void intr_setup();
 
@@ -79,11 +82,16 @@ static void intr_setup();
 // AXI GPIO
 XGpio_Config *axi_gpio_cfg_ptr;
 XGpio_Config *axi_gpio_cfg_ptr_2;
+// AXI GPIO 0 has leds and buttons
+// AXI GPIO 1 has switches
 XGpio axi_gpio_0;
 XGpio axi_gpio_1;
 // Interrupt configuration and controller instance
 XScuGic_Config *intr_controller_cfg_ptr;
 XScuGic intr_controller;
+
+// ---------------- Global Flags ----------------
+u8 switches_flag;
 
 int main(){
 
@@ -93,17 +101,54 @@ int main(){
 	xil_printf("Initialize GPIOs\n\r");
 	init_axi_gpio();
 
+	switches_flag = check_switches_initial();
+	xil_printf("%d", switches_flag);
+
 	// Setup interrupt for AXI GPIO 1
 	intr_setup();
 
 	while(1){
-		// Toggle the leds
-		toggle_leds();
+		// Evaluate using the global switch value
+		// Will check if the value of the switches has changed...
+		// ...using the interrupt
+		xil_printf("%d", switches_flag, "\n");
+		switch(switches_flag){
+		// When both switches are off
+		case 0:
+			// Toggle the leds
+			toggle_leds();
+			break;
+		// If switch 0 is on
+		// Blink leds constantly
+		case 1:
+			blink_leds_normally();
+			break;
+		// If switch 2 is on
+		// Blink leds with SOS signal
+		case 2:
+			blink_leds_sos();
+			break;
+		// If both switches are on
+		// Toggle leds
+		case 3:
+			// Toggle the leds
+			toggle_leds();
+			break;
+		default:
+			xil_printf("Something is not right");
+		}
 	}
 
 	xil_printf("Cleanup\n\r");
 	cleanup_platform();
 	return 0;
+}
+
+int check_switches_initial(){
+	// Read from switches
+	switches_flag = XGpio_DiscreteRead(&axi_gpio_1, 1);
+	xil_printf("%d", switches_flag);
+	return switches_flag;
 }
 
 // Initialize and configure GPIOs
@@ -140,6 +185,43 @@ void toggle_leds(){
 	usleep(500);
 }
 
+void blink_leds_normally(){
+	XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00001111);
+	usleep(500000);
+	XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00000000);
+	usleep(500000);
+}
+
+void blink_leds_sos(){
+	// Short short short
+	// This is a blocking execution
+	// Holds the program until it has finished blinking
+	// Maybe add a if to check if the switches has changed??
+	for (int i = 0; i < 3; i++){
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00001111);
+		usleep(500000);
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00000000);
+		usleep(500000);
+	}
+	// Long long long
+	for (int j = 0; j < 3; j++){
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00001111);
+		sleep(1);
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00000000);
+		usleep(500000);
+	}
+
+	// Short short short
+	for (int k = 0; k < 3; k++){
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00001111);
+		usleep(500000);
+		XGpio_DiscreteWrite(&axi_gpio_0, 1, 0b00000000);
+		usleep(500000);
+	}
+	sleep(2);
+
+}
+
 void intr_handler(){
 	// Disable the AXI GPIO interrupts
 	// Prevent any other interrupts from the GPIO
@@ -149,18 +231,19 @@ void intr_handler(){
 	// Add code for interrupt handler
 	xil_printf("\nInterrupt from switches\n\r");
 	u32 switches_check = XGpio_DiscreteRead(&axi_gpio_1, 1);
+
 	switch(switches_check){
 	case 0:
-		xil_printf("Value is 0\n\r");
+		switches_flag = 0;
 		break;
 	case 1:
-		xil_printf("Value is 1\n\r");
+		switches_flag = 1;
 		break;
 	case 2:
-		xil_printf("Value is 2\n\r");
+		switches_flag = 2;
 		break;
 	case 3:
-		xil_printf("Value is 3\n\r");
+		switches_flag = 3;
 		break;
 	default:
 		xil_printf("Something is not right\n\r");
