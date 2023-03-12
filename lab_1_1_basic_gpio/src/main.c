@@ -1,16 +1,10 @@
 /*
-
+ * lab 1.1 - Interrupts
  *
- * This application configures UART 16550 to baud rate 9600.
- * PS7 UART (Zynq) is not initialized by this application, since
- * bootrom/bsp configures it to baud rate 115200
+ * This application runs a simple interrupt tied to the GPIO1, which contains 1 channel...
+ * ...with switches tied to it.
  *
- * ------------------------------------------------
- * | UART TYPE   BAUD RATE                        |
- * ------------------------------------------------
- *   uartns550   9600
- *   uartlite    Configurable only in HW design
- *   ps7_uart    115200 (configured by bootrom/bsp)
+ *
  */
 
 #include <stdio.h>
